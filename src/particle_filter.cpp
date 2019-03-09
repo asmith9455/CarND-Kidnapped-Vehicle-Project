@@ -95,7 +95,12 @@ double NormalDist(const double mux, const double muy, const double sdx, const do
   using std::exp;
   using std::pow;
 
-  return 1 / 2 / M_PI / sdx / sdy * exp(0.5 * (pow(x - mux, 2) / pow(sdx, 2) + pow(y - muy, 2) / pow(sdy, 2)));
+  const auto x_term_1 = (x-mux)*(x-mux)/sdx/sdx;
+  const auto y_term_1 = (y-muy)*(y-muy)/sdy/sdy;
+  const auto scalar = 1.0/2.0/M_PI/sdx/sdy;
+  
+  //return 1.0 / 2.0 / M_PI / sdx / sdy * exp(0.5 * (pow(x - mux, 2.0) / pow(sdx, 2.0) + pow(y - muy, 2.0) / pow(sdy, 2.0)));
+  return scalar*exp(-0.5*(x_term_1+y_term_1));
 }
 
 void TransformEgoToMap(const double ego_x, const double ego_y, const double ego_theta, const double x, const double y, double &xt, double &yt)
@@ -130,12 +135,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   const auto best_particle_it = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
 
+  std::cout << "best particle before weight update: " << best_particle_it->weight << std::endl;
+
   for (auto &p : particles)
   {
     //we need to calculate the weight for this particle
     //we can do this by determining which landmarks are associated with each of our observations.
     //once we have the associations, we can
-    double weight = 1.0;
+    double weight = 1.0; //todo: should the particle weight start at 1.0 again?
 
     for (const auto &obs : observations)
     {
@@ -159,10 +166,19 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
       //calculate the weight given the best landmark for this observation
       //@todo: what if 2 observations associate with the same landmark?
-
-      p.weight *= NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
+      const auto new_weight = NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
+      std::cout << "new_weight: " << new_weight << ", ";
+      p.weight *= new_weight;
     }
   }
+
+  std::cout << std::endl;
+
+  const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+  const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+
+  std::cout << "best particle after weight update: " << best_particle_it2->weight << std::endl;
+  std::cout << "worst particle after weight update: " << worst_particle_it2->weight << std::endl;
 }
 
 void ParticleFilter::resample()

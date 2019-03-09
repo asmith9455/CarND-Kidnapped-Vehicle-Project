@@ -23,7 +23,7 @@ using std::vector;
 
 void ParticleFilter::init(double x, double y, double theta, double std[])
 {
-  num_particles = 100; // TODO: Set the number of particles
+  num_particles = 1; // TODO: Set the number of particles
 
   using Distribution = std::normal_distribution<double>;
 
@@ -135,14 +135,18 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   const auto best_particle_it = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
 
-  std::cout << "best particle before weight update: " << best_particle_it->weight << std::endl;
+  // std::cout << "best particle before weight update: " << best_particle_it->weight << std::endl;
 
   for (auto &p : particles)
   {
     //we need to calculate the weight for this particle
     //we can do this by determining which landmarks are associated with each of our observations.
     //once we have the associations, we can
-    double weight = 1.0; //todo: should the particle weight start at 1.0 again?
+    // double weight = 1.0; //todo: should the particle weight start at 1.0 again?
+
+    p.associations.clear();
+    p.sense_x.clear();
+    p.sense_y.clear();
 
     for (const auto &obs : observations)
     {
@@ -156,6 +160,14 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       for (const auto &landmark : map_landmarks.landmark_list)
       {
         //@todo: should also skip the landmark if it is out of range of the sensor
+
+        const double range_to_landmark = dist(best_particle_it->x, best_particle_it->y, landmark.x_f, landmark.y_f);
+
+        const bool out_of_range = range_to_landmark > sensor_range + 1.0;
+
+        if (out_of_range)
+          continue;
+
         const auto distance = dist(landmark.x_f, landmark.y_f, obs_x_map, obs_y_map);
         if (distance < best_landmark_distance)
         {
@@ -167,18 +179,20 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       //calculate the weight given the best landmark for this observation
       //@todo: what if 2 observations associate with the same landmark?
       const auto new_weight = NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
-      std::cout << "new_weight: " << new_weight << ", ";
       p.weight *= new_weight;
+      p.associations.push_back(best_landmark.id_i);
+      p.sense_x.push_back(best_landmark.x_f);
+      p.sense_y.push_back(best_landmark.y_f);
     }
   }
 
   std::cout << std::endl;
 
-  const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
-  const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+  // const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+  // const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
 
-  std::cout << "best particle after weight update: " << best_particle_it2->weight << std::endl;
-  std::cout << "worst particle after weight update: " << worst_particle_it2->weight << std::endl;
+  // std::cout << "best particle after weight update: " << best_particle_it2->weight << std::endl;
+  // std::cout << "worst particle after weight update: " << worst_particle_it2->weight << std::endl;
 }
 
 void ParticleFilter::resample()

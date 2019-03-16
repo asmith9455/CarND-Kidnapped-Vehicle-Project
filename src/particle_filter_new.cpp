@@ -23,7 +23,7 @@ using std::vector;
 
 void ParticleFilter::init(double x, double y, double theta, double std[])
 {
-  num_particles = 2; // TODO: Set the number of particles
+  num_particles = 100;
 
   using Distribution = std::normal_distribution<double>;
 
@@ -47,7 +47,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
   is_initialized = true;
 }
 
-void ParticleFilter::BicycleModel(const double dt, const double speed, const double yaw_rate, const double x_sd, const double y_sd, const double theta_sd, Particle &particle)
+void BicycleModel(const double dt, const double speed, const double yaw_rate, const double speed_sd, const double yaw_rate_sd, Particle &particle)
 {
   using ::std::cos;
   using ::std::sin;
@@ -66,15 +66,9 @@ void ParticleFilter::BicycleModel(const double dt, const double speed, const dou
     particle.theta = new_theta;
   }
 
-  using Distribution = std::normal_distribution<double>;
-
-  Distribution x_dist{0.0, x_sd};
-  Distribution y_dist{0.0, y_sd};
-  Distribution theta_dist{0.0, theta_sd};
-
-  particle.x += x_dist(gen);
-  particle.y += y_dist(gen);
-  particle.theta += theta_dist(gen);
+  // std::normal_distribution<double> dist_x{};
+  // std::normal_distribution<double> dist_y{};
+  // std::normal_distribution<double> dist_theta{};
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[],
@@ -89,7 +83,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    */
   for (auto &particle : particles)
   {
-    BicycleModel(delta_t, velocity, yaw_rate, std_pos[0], std_pos[1], std_pos[2], particle);
+    BicycleModel(delta_t, velocity, yaw_rate, std_pos[0], std_pos[1], particle);
   }
 }
 
@@ -119,6 +113,18 @@ double NormalDist(const double mux, const double muy, const double sdx, const do
   return scalar*exp(-0.5*(x_term_1+y_term_1));
 }
 
+void TransformEgoToMap(const double ego_x, const double ego_y, const double ego_theta, const double x, const double y, double &xt, double &yt)
+{
+  //first rotate by -theta
+  xt = std::cos(-ego_theta) * x - std::sin(ego_theta) * y;
+  yt = std::sin(ego_theta) * x + std::cos(ego_theta) * y;
+
+  //now account for translation
+
+  xt += ego_x;
+  yt += ego_y;
+}
+
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const vector<LandmarkObs> &observations,
                                    const Map &map_landmarks)
@@ -141,84 +147,62 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   // std::cout << "best particle before weight update: " << best_particle_it->weight << std::endl;
 
-  std::cout << "STARTING UPDATE-------------- (with " << particles.size() << " particles)" << std::endl;
-
-  for (int i = 0; i < particles.size(); ++i)
+  for (auto &p : particles)
   {
-    Particle& p = particles[i];
     //we need to calculate the weight for this particle
     //we can do this by determining which landmarks are associated with each of our observations.
     //once we have the associations, we can
-    // double weight = 1.0; //todo: should the particle weight start at 1.0 again?
+    // p.weight = 1.0;
 
     p.associations.clear();
     p.sense_x.clear();
     p.sense_y.clear();
-    p.best_dists.clear();
-    p.weight = 1e6;
-
-    // std::cout << "(p: " << p.id << "; ";
-
-    // std::cout << "number  of observations is: " << observations.size() << "; ";
 
     for (const auto &obs : observations)
     {
       Map::single_landmark_s best_landmark;
-      bool found_landmark{false};
       std::double_t best_landmark_distance = std::numeric_limits<std::double_t>::max();
 
       //transform the observation into the map frame
       double obs_x_map, obs_y_map;
-      TransformEgoToMap(p.x, p.y, p.theta, obs.x, obs.y, obs_x_map, obs_y_map);
+      TransformEgoToMap(best_particle_it->x, best_particle_it->y, best_particle_it->theta, obs.x, obs.y, obs_x_map, obs_y_map);
 
       for (const auto &landmark : map_landmarks.landmark_list)
       {
-        // const double range_to_landmark = dist(p.x, p.y, landmark.x_f, landmark.y_f);
+        //@todo: should also skip the landmark if it is out of range of the sensor
 
-        // const bool out_of_range = range_to_landmark > sensor_range + 1.0;
+        const double range_to_landmark = dist(best_particle_it->x, best_particle_it->y, landmark.x_f, landmark.y_f);
 
-        // if (out_of_range)
-        //   continue;
+        const bool out_of_range = range_to_landmark > sensor_range + 1.0;
+
+        if (out_of_range)
+          continue;
 
         const auto distance = dist(landmark.x_f, landmark.y_f, obs_x_map, obs_y_map);
         if (distance < best_landmark_distance)
         {
           best_landmark_distance = distance;
           best_landmark = landmark;
-          found_landmark = true;
         }
       }
 
-      // if (!found_landmark)
-      //   continue;
-
       //calculate the weight given the best landmark for this observation
-      const double new_weight = NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
+      //@todo: what if 2 observations associate with the same landmark?
+      const auto new_weight = NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
       p.weight *= new_weight;
-      // std::cout << "new_weight: " << std::to_string(new_weight) << ", " << std::endl;
       p.associations.push_back(best_landmark.id_i);
       p.sense_x.push_back(best_landmark.x_f);
       p.sense_y.push_back(best_landmark.y_f);
-      p.best_dists.push_back(best_landmark_distance);
     }
-    // std::cout << "w: " << std::to_string(p.weight) << "), ";
   }
 
   std::cout << std::endl;
 
-  const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
-  const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight > p2.weight; });
+  // const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+  // const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
 
-  std::cout << "best particle after weight update: " << std::to_string(best_particle_it2->weight) << std::endl;
-  for(const double& dist : best_particle_it2->best_dists)
-  {
-    std::cout << dist << ", ";
-  }
-  std::cout << "worst particle after weight update: " << std::to_string(worst_particle_it2->weight) << std::endl;
-
-  std::cout << "best particle: (" << std::to_string(best_particle_it2->x) << ", " << std::to_string(best_particle_it2->y) << ", " << std::to_string(best_particle_it2->theta) << ")" << std::endl;
-
-  std::cout << "ENDING UPDATE-------------- (with " << particles.size() << " particles)" << std::endl;
+  // std::cout << "best particle after weight update: " << best_particle_it2->weight << std::endl;
+  // std::cout << "worst particle after weight update: " << worst_particle_it2->weight << std::endl;
 }
 
 void ParticleFilter::resample()
@@ -243,12 +227,8 @@ void ParticleFilter::resample()
 
   vector<Particle> new_particles;
 
-  for(std::size_t i = 0; i < particles.size(); ++i)
-  {
-    const std::size_t randomly_selected_index = index_dist(gen);
-    // std::cout << "selected random index: " << randomly_selected_index << std::endl; 
-    new_particles.push_back(particles[randomly_selected_index]);
-  }
+  transform(particles.begin(), particles.end(), back_inserter(new_particles),
+            [this, &index_dist](const Particle &p) { return particles[index_dist(gen)]; });
 
   particles = new_particles;
 }

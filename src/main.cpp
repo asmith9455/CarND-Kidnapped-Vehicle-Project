@@ -76,7 +76,7 @@ int main() {
             double previous_velocity = std::stod(j[1]["previous_velocity"].get<string>());
             double previous_yawrate = std::stod(j[1]["previous_yawrate"].get<string>());
 
-            pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
+            // pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
           }
 
           // receive noisy observation data from the simulator
@@ -109,7 +109,15 @@ int main() {
 
           // Update the weights and resample
           pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
-          pf.resample();
+          // pf.resample();
+
+          double sense_x = std::stod(j[1]["sense_x"].get<string>());
+          double sense_y = std::stod(j[1]["sense_y"].get<string>());
+          double sense_theta = std::stod(j[1]["sense_theta"].get<string>());
+
+          std::cout << "sense_x: " << sense_x << std::endl;
+          std::cout << "sense_y: " << sense_y << std::endl;
+          std::cout << "sense_theta: " << sense_theta << std::endl;
 
           // Calculate and output the average weighted error of the particle 
           //   filter over all time steps so far.
@@ -127,8 +135,8 @@ int main() {
             weight_sum += particles[i].weight;
           }
 
-          std::cout << "highest w " << highest_weight << std::endl;
-          std::cout << "average w " << weight_sum/num_particles << std::endl;
+          // std::cout << "highest w " << highest_weight << std::endl;
+          // std::cout << "average w " << weight_sum/num_particles << std::endl;
 
           json msgJson;
           msgJson["best_particle_x"] = best_particle.x;

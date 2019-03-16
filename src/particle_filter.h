@@ -20,6 +20,7 @@ struct Particle {
   double y;
   double theta;
   double weight;
+  std::vector<double> best_dists;
   std::vector<int> associations;
   std::vector<double> sense_x;
   std::vector<double> sense_y;
@@ -45,6 +46,8 @@ class ParticleFilter {
    *   standard deviation of y [m], standard deviation of yaw [rad]]
    */
   void init(double x, double y, double theta, double std[]);
+
+  void BicycleModel(const double dt, const double speed, const double yaw_rate, const double x_sd, const double y_sd, const double theta_sd, Particle &particle);
 
   /**
    * prediction Predicts the state for the next time step

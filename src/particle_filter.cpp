@@ -360,16 +360,16 @@ void ParticleFilter::resample()
 
   vector<Particle> new_particles;
 
-  ::std::cout << "randomly selected indices are: " << ::std::endl;
+  // ::std::cout << "randomly selected indices are: " << ::std::endl;
 
   for(std::size_t i = 0; i < particles.size(); ++i)
   {
     const std::size_t randomly_selected_index = index_dist(gen);
-    std::cout << randomly_selected_index << ", "; 
+    // std::cout << randomly_selected_index << ", "; 
     new_particles.push_back(particles[randomly_selected_index]);
   }
 
-  ::std::cout << ::std::endl;
+  // ::std::cout << ::std::endl;
 
   particles = new_particles;
 

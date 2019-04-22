@@ -2,7 +2,7 @@ project(PARTICLE_FILTER)
 
 cmake_minimum_required (VERSION 3.5)
 
-add_definitions(-std=c++11)
+add_definitions(-std=c++11 -w -g)
 
 set(CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS "${CXX_FLAGS}")
@@ -10,7 +10,7 @@ set(CMAKE_CXX_FLAGS "${CXX_FLAGS}")
 file(GLOB HEADERS src/*.h)
 file(GLOB HEADERS_HPP src/*.hpp)
 
-set(sources src/particle_filter.cpp src/main.cpp ${HEADERS} ${HEADERS_HPP})
+set(sources src/particle_filter.cpp src/main.cpp src/utility.cpp ${HEADERS} ${HEADERS_HPP})
 
 
 
@@ -21,12 +21,16 @@ include_directories(/usr/local/opt/openssl/include)
 link_directories(/usr/local/lib)
 link_directories(/usr/local/opt/openssl/lib)
 link_directories(/usr/local/Cellar/libuv/1*/lib)
+link_directories(/usr/lib/x86_64-linux-gnu/)
 
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin") 
 
 
 add_executable(particle_filter ${sources})
 
+target_include_directories(particle_filter SYSTEM PUBLIC include)
+target_include_directories(particle_filter SYSTEM PUBLIC /usr/include/python2.7)
 
-target_link_libraries(particle_filter z ssl uv uWS)
+
+target_link_libraries(particle_filter z ssl uv uWS python2.7)
 

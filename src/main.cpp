@@ -47,6 +47,8 @@ int main() {
   // Create particle filter
   ParticleFilter pf;
 
+  pf.setMap(map);
+
   h.onMessage([&pf,&map,&delta_t,&sensor_range,&sigma_pos,&sigma_landmark]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, 
                uWS::OpCode opCode) {
@@ -63,6 +65,22 @@ int main() {
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
+
+          static int count = 0;
+
+          static const int debug_point_1 = 903;
+
+          // if (count > debug_point_1)
+          // {
+          //   pf.setVisualizationMode(true);
+          // }
+          // else
+          // {
+          //   pf.setVisualizationMode(false);
+          // }
+
+          ++count;
+
           if (!pf.initialized()) {
             // Sense noisy position data from the simulator
             double sense_x = std::stod(j[1]["sense_x"].get<string>());
@@ -76,7 +94,7 @@ int main() {
             double previous_velocity = std::stod(j[1]["previous_velocity"].get<string>());
             double previous_yawrate = std::stod(j[1]["previous_yawrate"].get<string>());
 
-            // pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
+            pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
           }
 
           // receive noisy observation data from the simulator
@@ -108,8 +126,8 @@ int main() {
           }
 
           // Update the weights and resample
-          pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
-          // pf.resample();
+          pf.updateWeights(sensor_range, sigma_landmark, noisy_observations);
+          pf.resample();
 
           double sense_x = std::stod(j[1]["sense_x"].get<string>());
           double sense_y = std::stod(j[1]["sense_y"].get<string>());

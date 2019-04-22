@@ -80,8 +80,7 @@ class ParticleFilter {
    * @param map Map class containing map landmarks
    */
   void updateWeights(double sensor_range, double std_landmark[], 
-                     const std::vector<LandmarkObs> &observations,
-                     const Map &map_landmarks);
+                     const std::vector<LandmarkObs> &observations);
   
   /**
    * resample Resamples from the updated set of particles to form
@@ -115,15 +114,38 @@ class ParticleFilter {
   // Set of current particles
   std::vector<Particle> particles;
 
+  void setMap(const Map& map)
+  {
+    map_landmarks = map;
+  }
+
+  void setVisualizationMode(const bool vis_mode)
+  {
+    enable_visualization = vis_mode;
+  }
+
  private:
+
+  void PlotParticles(
+    const ::std::string& title,
+    const ::std::vector<Particle>& particles,
+    const double mean_x, 
+    const double mean_y, 
+    const double mean_theta,
+    const double mean_weight = 1.0,
+    const bool scale_by_weights = false);
+
   // Number of particles to draw
   int num_particles; 
   
   // Flag, if filter is initialized
   bool is_initialized;
+  bool enable_visualization{false};
   
   // Vector of weights of all particles
   std::vector<double> weights; 
+
+  Map map_landmarks;
 
   std::random_device rd{};
   std::mt19937 gen;

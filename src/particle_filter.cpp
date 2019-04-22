@@ -17,13 +17,96 @@
 #include <vector>
 
 #include "helper_functions.h"
+#include "utility.h"
+
+#include <matplotlibcpp.h>
 
 using std::string;
 using std::vector;
 
+namespace mpl = matplotlibcpp;
+
+template<typename T>
+T clamp(const T value, const T min, const T max)
+{
+  return ::std::min(::std::max(value, min), max);
+}
+
+void ParticleFilter::PlotParticles(
+  const ::std::string& title,
+  const ::std::vector<Particle>& particles,
+  const double mean_x, 
+  const double mean_y, 
+  const double mean_theta,
+  const double mean_weight,
+  const bool scale_by_weights)
+{
+  if (enable_visualization)
+  {
+    static const auto quiver_scalar{1e-2};
+
+    ::std::vector<double> 
+      init_xs, 
+      init_ys, 
+      init_us, 
+      init_ws, 
+      mean_xs{mean_x}, 
+      mean_ys{mean_y}, 
+      mean_us{quiver_scalar * ::std::cos(mean_theta)}, 
+      mean_ws{quiver_scalar * ::std::sin(mean_theta)};
+
+    for (const auto& p : particles)
+    {
+      init_xs.push_back(p.x);
+      init_ys.push_back(p.y);
+      
+      auto size_scalar = quiver_scalar;
+      
+      if(scale_by_weights)
+      {
+        size_scalar *= p.weight;
+      }
+
+      size_scalar = clamp(size_scalar, 1e-6, 1.0);
+
+      init_us.push_back(size_scalar * ::std::cos(mean_theta));
+      init_ws.push_back(size_scalar * ::std::sin(mean_theta));
+    }
+
+    if(scale_by_weights)
+    {
+      const auto mean_scalar = clamp(quiver_scalar * mean_weight, 1e-6, 1.0); 
+      init_us.at(0) *= mean_scalar;
+      init_ws.at(0) *= mean_scalar;
+    }
+    else
+    {
+      const auto mean_scalar = clamp(quiver_scalar, 1e-6, 1.0); 
+      init_us.at(0) *= mean_scalar;
+      init_ws.at(0) *= mean_scalar;
+    }
+
+    mpl::quiver(init_xs, init_ys, init_us, init_ws);
+    mpl::quiver(mean_xs, mean_ys, mean_us, mean_ws, ::std::map<::std::string, ::std::string>{{"facecolors", "r"}});
+
+    // ::std::vector<double> landmark_xs, landmark_ys;
+
+    // for(const auto& landmark : map_landmarks.landmark_list)
+    // {
+    //   landmark_xs.push_back(landmark.x_f);
+    //   landmark_ys.push_back(landmark.y_f);
+    // }
+    // mpl::scatter(landmark_xs, landmark_ys, 2.0);
+
+    mpl::title(title);
+
+    mpl::show();
+  }
+}
+
 void ParticleFilter::init(double x, double y, double theta, double std[])
 {
-  num_particles = 2; // TODO: Set the number of particles
+  num_particles = 100; // TODO: Set the number of particles
 
   using Distribution = std::normal_distribution<double>;
 
@@ -44,6 +127,8 @@ void ParticleFilter::init(double x, double y, double theta, double std[])
     particles.push_back(p);
   }
 
+  PlotParticles("Initialization", particles, x, y, theta);
+
   is_initialized = true;
 }
 
@@ -54,8 +139,8 @@ void ParticleFilter::BicycleModel(const double dt, const double speed, const dou
 
   if (std::fabs(yaw_rate) < 1e-10)
   {
-    particle.x += speed * cos(particle.theta);
-    particle.y += speed * sin(particle.theta);
+    particle.x += speed * cos(particle.theta) * dt;
+    particle.y += speed * sin(particle.theta) * dt;
   }
   else
   {
@@ -87,10 +172,31 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    *  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
    *  http://www.cplusplus.com/reference/random/default_random_engine/
    */
+
+  ::std::cout << "-------------------------------" << ::std::endl;
+  ::std::cout << "Prediction Step" << ::std::endl;
+  ::std::cout << "delta_t" << delta_t << ::std::endl;
+  ::std::cout << "velocity" << velocity << ::std::endl;
+  ::std::cout << "yaw_rate" << yaw_rate << ::std::endl;
+  ::std::cout << "x std dev" << std_pos[0] << ::std::endl;
+  ::std::cout << "y std dev" << std_pos[1] << ::std::endl;
+  ::std::cout << "theta std dev" << std_pos[2] << ::std::endl;
+
   for (auto &particle : particles)
   {
     BicycleModel(delta_t, velocity, yaw_rate, std_pos[0], std_pos[1], std_pos[2], particle);
   }
+
+  const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+
+  PlotParticles(
+    "After prediction with noise",
+    particles, 
+    {best_particle_it2->x}, 
+    {best_particle_it2->y}, 
+    {best_particle_it2->theta}, 
+    {best_particle_it2->weight},
+    true);
 }
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
@@ -120,8 +226,7 @@ double NormalDist(const double mux, const double muy, const double sdx, const do
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
-                                   const vector<LandmarkObs> &observations,
-                                   const Map &map_landmarks)
+                                   const vector<LandmarkObs> &observations)
 {
   /**
    * TODO: Update the weights of each particle using a mult-variate Gaussian 
@@ -155,7 +260,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     p.sense_x.clear();
     p.sense_y.clear();
     p.best_dists.clear();
-    p.weight = 1e6;
+    p.weight = 1.0;
 
     // std::cout << "(p: " << p.id << "; ";
 
@@ -169,7 +274,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
       //transform the observation into the map frame
       double obs_x_map, obs_y_map;
-      TransformEgoToMap(p.x, p.y, p.theta, obs.x, obs.y, obs_x_map, obs_y_map);
+      utility::TransformObsFromEgoFrameToMapFrame(p.x, p.y, p.theta, obs.x, obs.y, obs_x_map, obs_y_map);
 
       for (const auto &landmark : map_landmarks.landmark_list)
       {
@@ -189,8 +294,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         }
       }
 
-      // if (!found_landmark)
-      //   continue;
+      ::std::cout << best_landmark_distance << ", ";
+
+      assert(found_landmark);
 
       //calculate the weight given the best landmark for this observation
       const double new_weight = NormalDist(best_landmark.x_f, best_landmark.y_f, std_landmark[0], std_landmark[1], obs_x_map, obs_y_map);
@@ -201,6 +307,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       p.sense_y.push_back(best_landmark.y_f);
       p.best_dists.push_back(best_landmark_distance);
     }
+
+    ::std::cout << ::std::endl;
     // std::cout << "w: " << std::to_string(p.weight) << "), ";
   }
 
@@ -208,6 +316,15 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
   const auto worst_particle_it2 = std::min_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight > p2.weight; });
+
+  PlotParticles(
+    "After weight updates",
+    particles, 
+    {best_particle_it2->x}, 
+    {best_particle_it2->y}, 
+    {best_particle_it2->theta}, 
+    {best_particle_it2->weight},
+    true);
 
   std::cout << "best particle after weight update: " << std::to_string(best_particle_it2->weight) << std::endl;
   for(const double& dist : best_particle_it2->best_dists)
@@ -243,14 +360,29 @@ void ParticleFilter::resample()
 
   vector<Particle> new_particles;
 
+  ::std::cout << "randomly selected indices are: " << ::std::endl;
+
   for(std::size_t i = 0; i < particles.size(); ++i)
   {
     const std::size_t randomly_selected_index = index_dist(gen);
-    // std::cout << "selected random index: " << randomly_selected_index << std::endl; 
+    std::cout << randomly_selected_index << ", "; 
     new_particles.push_back(particles[randomly_selected_index]);
   }
 
+  ::std::cout << ::std::endl;
+
   particles = new_particles;
+
+  const auto best_particle_it2 = std::max_element(particles.begin(), particles.end(), [](const Particle &p1, const Particle &p2) { return p1.weight < p2.weight; });
+
+  PlotParticles(
+    "After Resampling",
+    particles, 
+    {best_particle_it2->x}, 
+    {best_particle_it2->y}, 
+    {best_particle_it2->theta}, 
+    {best_particle_it2->weight},
+    true);
 }
 
 void ParticleFilter::SetAssociations(Particle &particle,

@@ -49,7 +49,6 @@ class EgoToMapTransformationFixture : public ::testing::Test
         obs_y_ego_,
         expected_obs_x_map_,
         expected_obs_y_map_;
-
 };
 
 TEST_F(EgoToMapTransformationFixture, Test1)
